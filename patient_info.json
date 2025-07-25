@@ -1,0 +1,23 @@
+{
+    "personal": {
+        "name": "Omkar Hundre",
+        "age": "21",
+        "gender": "Male",
+        "height": "180",
+        "weight": "68"
+    },
+    "medical": {
+        "diagnosis": "Alzhymer",
+        "symptoms": [
+            "Temporal Memory loss"
+        ],
+        "medications": [],
+        "allergies": [],
+        "medical_history": ""
+    },
+    "monitoring": {
+        "start_date": "2025-05-03",
+        "reason": "Doctor",
+        "concerns": []
+    }
+}
