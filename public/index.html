@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Behavior Analysis Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <style>
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* Vital signs monitor styling */
+        .vital-value {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        
+        .heart-rate-value {
+            color: #dc2626;
+        }
+        
+        .bp-value {
+            color: #2563eb;
+        }
+        
+        .ecg-value {
+            color: #10b981;
+        }
+        
+        .blink {
+            animation: blink 1s infinite;
+        }
+        
+        @keyframes blink {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        /* Message content styling */
+        .message-content {
+            line-height: 1.5;
+        }
+        
+        .message-content strong {
+            font-weight: 600;
+        }
+        
+        .message-content em {
+            font-style: italic;
+        }
+        
+        .message-content code {
+            font-family: 'Courier New', monospace;
+            padding: 0.1rem 0.3rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Style for AI message code blocks */
+        .bg-gray-200 code {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+        
+        /* Style for user message code blocks */
+        .bg-blue-600 code {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+        
+        /* List styling */
+        .message-content ul {
+            padding-left: 1.5rem;
+            margin: 0.5rem 0;
+        }
+        
+        .message-content li {
+            margin-bottom: 0.25rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 h-screen overflow-hidden">
+    <div class="flex flex-col h-screen">
+        <!-- Header -->
+        <header class="bg-blue-600 text-white p-4 shadow-md">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 class="text-2xl font-bold">Behavior Analysis Dashboard</h1>
+                <div class="flex items-center space-x-4">
+                    <button id="add-patient-btn" class="bg-green-600 hover:bg-green-700 px-3 py-1 rounded-lg text-sm">
+                        Add/Edit Patient
+                    </button>
+                    <span id="status-indicator" class="flex items-center">
+                        <span class="h-3 w-3 rounded-full bg-green-400 mr-2"></span>
+                        <span id="status-text">System Active</span>
+                    </span>
+                    <button id="refresh-btn" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded-lg text-sm">
+                        Refresh Data
+                    </button>
+                    <button id="notification-settings-btn" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded-lg text-sm ml-2">
+                        Notification Settings
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Add this after the header section -->
+        <div id="patient-info-banner" class="bg-blue-100 p-2 border-b border-blue-200 hidden">
+            <div class="container mx-auto flex justify-between items-center">
+                <div class="flex items-center space-x-4">
+                    <span class="font-medium">Patient:</span>
+                    <span id="patient-name">Loading...</span>
+                    <span class="text-gray-500">|</span>
+                    <span class="font-medium">Age:</span>
+                    <span id="patient-age">--</span>
+                    <span class="text-gray-500">|</span>
+                    <span class="font-medium">Diagnosis:</span>
+                    <span id="patient-diagnosis">Loading...</span>
+                </div>
+                <button id="patient-details-btn" class="text-blue-600 hover:text-blue-800 text-sm">
+                    View Details
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex flex-1 overflow-hidden">
+            <!-- Left Sidebar - Analysis Data -->
+            <div class="w-1/4 bg-white shadow-md overflow-y-auto scrollbar-thin">
+                <div class="p-4">
+                    <h2 class="text-xl font-semibold mb-4">Behavior Analysis</h2>
+                    <div id="analysis-timeline" class="space-y-4">
+                        <!-- Analysis entries will be populated here -->
+                        <div class="p-3 bg-gray-100 rounded-lg animate-pulse">
+                            <div class="h-4 bg-gray-300 rounded mb-2 w-1/2"></div>
+                            <div class="h-12 bg-gray-300 rounded"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Center Panel - Data Visualization -->
+            <div class="w-2/4 bg-gray-50 p-4 overflow-y-auto scrollbar-thin">
+                <!-- Knowledge Base Card -->
+                <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+                    <h2 class="text-xl font-semibold mb-4">Knowledge Base</h2>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <!-- Person Details -->
+                        <div class="mb-6">
+                            <h3 class="text-lg font-medium text-blue-600 mb-2">Person Information</h3>
+                            <div class="grid grid-cols-1 gap-4">
+                                <div class="bg-blue-50 p-3 rounded-lg">
+                                    <h4 class="font-medium text-blue-800 mb-1">Physical Appearance</h4>
+                                    <ul id="appearance-list" class="list-disc pl-5 text-sm"></ul>
+                                </div>
+                                <div class="bg-blue-50 p-3 rounded-lg">
+                                    <h4 class="font-medium text-blue-800 mb-1">Behaviors</h4>
+                                    <ul id="behaviors-list" class="list-disc pl-5 text-sm"></ul>
+                                </div>
+                                <div class="bg-blue-50 p-3 rounded-lg">
+                                    <h4 class="font-medium text-blue-800 mb-1">Emotional States</h4>
+                                    <ul id="emotions-list" class="list-disc pl-5 text-sm"></ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Environment -->
+                        <div class="mb-6">
+                            <h3 class="text-lg font-medium text-amber-600 mb-2">Environment</h3>
+                            <div class="bg-amber-50 p-3 rounded-lg">
+                                <h4 class="font-medium text-amber-800 mb-1">Room Features & Objects</h4>
+                                <ul id="environment-list" class="list-disc pl-5 text-sm"></ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vital Signs Monitor Card -->
+                <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+                    <h2 class="text-xl font-semibold mb-4">Vital Signs Monitor</h2>
+                    
+                    <div class="grid grid-cols-3 gap-4 mb-4">
+                        <!-- Heart Rate Card -->
+                        <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-md font-medium text-gray-700">Heart Rate</h3>
+                                <span id="heart-rate-value" class="text-xl font-bold text-red-600">-- BPM</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mb-2">Normal range: 60-100 BPM</div>
+                            <div class="h-20">
+                                <canvas id="heart-rate-chart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- Blood Pressure Card -->
+                        <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-md font-medium text-gray-700">Blood Pressure</h3>
+                                <span id="bp-value" class="text-xl font-bold text-blue-600">--/-- mmHg</span>
+                            </div>
+                            <div class="text-xs text-gray-500 mb-2">Normal range: 90-120/60-80 mmHg</div>
+                            <div class="h-20">
+                                <canvas id="bp-chart"></canvas>
+                            </div>
+                        </div>
+                        
+                        <!-- ECG Card -->
+                        <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                            <div class="flex justify-between items-center mb-2">
+                                <h3 class="text-md font-medium text-gray-700">ECG</h3>
+                                <span id="ecg-status" class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">Normal</span>
+                            </div>
+                            <div class="h-20">
+                                <canvas id="ecg-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Full ECG Chart -->
+                    <div class="bg-white border border-gray-200 rounded-lg p-3 shadow-sm">
+                        <h3 class="text-md font-medium text-gray-700 mb-2">ECG Monitor</h3>
+                        <div class="h-40">
+                            <canvas id="full-ecg-chart"></canvas>
+                        </div>
+                        <div class="flex justify-between mt-2 text-xs text-gray-500">
+                            <span>0s</span>
+                            <span>2s</span>
+                            <span>4s</span>
+                            <span>6s</span>
+                            <span>8s</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Vital Signs Status -->
+                    <div class="flex justify-between items-center mt-4 px-2">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 rounded-full bg-green-500 mr-2 blink"></div>
+                            <span class="text-xs text-gray-600">MONITORING</span>
+                        </div>
+                        <div class="text-xs text-gray-600" id="monitoring-time">00:00:00</div>
+                    </div>
+                </div>
+
+                <!-- Simulation Controls Card -->
+                <div class="bg-white rounded-lg shadow-md p-4 mb-4">
+                    <div class="flex justify-between items-center mb-3">
+                        <h3 class="text-md font-medium text-gray-700">Simulation Controls</h3>
+                        <button id="toggle-sim-panel" class="text-xs bg-gray-200 hover:bg-gray-300 px-2 py-1 rounded">
+                            Show/Hide
+                        </button>
+                    </div>
+                    
+                    <div id="sim-panel" class="hidden">
+                        <div class="text-xs text-gray-500 mb-3">Use these controls to simulate abnormal vital signs for demonstration purposes.</div>
+                        
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Heart Rate (BPM)</label>
+                                <div class="flex items-center">
+                                    <input id="sim-heart-rate" type="number" min="40" max="200" value="130" class="w-20 px-2 py-1 border border-gray-300 rounded-md mr-2">
+                                    <button id="sim-high-hr-btn" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded">
+                                        Simulate High
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Blood Pressure (mmHg)</label>
+                                <div class="flex items-center">
+                                    <input id="sim-systolic" type="number" min="90" max="200" value="160" class="w-16 px-2 py-1 border border-gray-300 rounded-md mr-1">
+                                    <span class="text-gray-500 mr-1">/</span>
+                                    <input id="sim-diastolic" type="number" min="50" max="120" value="100" class="w-16 px-2 py-1 border border-gray-300 rounded-md mr-2">
+                                    <button id="sim-high-bp-btn" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded">
+                                        Simulate High
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between">
+                            <button id="sim-irregular-ecg-btn" class="bg-red-500 hover:bg-red-600 text-white text-xs px-2 py-1 rounded">
+                                Simulate Irregular ECG
+                            </button>
+                            
+                            <button id="sim-multiple-btn" class="bg-yellow-500 hover:bg-yellow-600 text-white text-xs px-2 py-1 rounded">
+                                Simulate Multiple Issues
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Sidebar - Chat -->
+            <div class="w-1/4 bg-white shadow-md flex flex-col">
+                <div class="p-4 bg-gray-100 border-b">
+                    <h2 class="text-xl font-semibold mb-1">AI Assistant</h2>
+                    <p class="text-sm text-gray-600">Ask questions about the observed behavior</p>
+                </div>
+                <div id="chat-messages" class="flex-1 p-4 overflow-y-auto scrollbar-thin space-y-4">
+                    <!-- Chat messages will be populated here -->
+                    <div class="flex justify-start">
+                        <div class="bg-gray-200 rounded-lg py-2 px-4 max-w-[80%]">
+                            <p class="text-sm">Hello! I'm your AI assistant. I can help you understand the behavior data being collected. You can type your questions or click the microphone icon to speak to me directly. What would you like to know?</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-4 border-t">
+                    <div class="flex items-center">
+                        <input id="chat-input" type="text" placeholder="Ask a question..." class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400">
+                        <button id="mic-btn" class="ml-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg p-2 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                            </svg>
+                        </button>
+                        <button id="send-btn" class="ml-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg p-2 flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add this before the closing body tag -->
+    <div id="patient-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold">Patient Information</h2>
+                    <button id="close-patient-modal" class="text-gray-500 hover:text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-lg font-medium text-blue-600 mb-2">Personal Information</h3>
+                        <div class="space-y-2">
+                            <p><span class="font-medium">Name:</span> <span id="modal-patient-name">--</span></p>
+                            <p><span class="font-medium">Age:</span> <span id="modal-patient-age">--</span></p>
+                            <p><span class="font-medium">Gender:</span> <span id="modal-patient-gender">--</span></p>
+                            <p><span class="font-medium">Height:</span> <span id="modal-patient-height">--</span> cm</p>
+                            <p><span class="font-medium">Weight:</span> <span id="modal-patient-weight">--</span> kg</p>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-lg font-medium text-green-600 mb-2">Medical Information</h3>
+                        <div class="space-y-2">
+                            <p><span class="font-medium">Diagnosis:</span> <span id="modal-patient-diagnosis">--</span></p>
+                            <p><span class="font-medium">Monitoring Since:</span> <span id="modal-monitoring-date">--</span></p>
+                            <p><span class="font-medium">Reason:</span> <span id="modal-monitoring-reason">--</span></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-6 space-y-4">
+                    <div>
+                        <h3 class="text-lg font-medium text-amber-600 mb-2">Current Symptoms</h3>
+                        <ul id="modal-patient-symptoms" class="list-disc pl-5"></ul>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-lg font-medium text-purple-600 mb-2">Medications</h3>
+                        <ul id="modal-patient-medications" class="list-disc pl-5"></ul>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-lg font-medium text-red-600 mb-2">Allergies</h3>
+                        <ul id="modal-patient-allergies" class="list-disc pl-5"></ul>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-600 mb-2">Medical History</h3>
+                        <p id="modal-patient-history" class="text-gray-700"></p>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-lg font-medium text-blue-600 mb-2">Monitoring Concerns</h3>
+                        <ul id="modal-patient-concerns" class="list-disc pl-5"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add this before the closing body tag -->
+    <div id="patient-input-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div class="p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-2xl font-bold">Patient Information Form</h2>
+                    <button id="close-patient-input-modal" class="text-gray-500 hover:text-gray-700">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <form id="patient-form" class="space-y-6">
+                    <div class="grid grid-cols-2 gap-6">
+                        <!-- Personal Information -->
+                        <div>
+                            <h3 class="text-lg font-medium text-blue-600 mb-3">Personal Information</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="patient-name-input" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                                    <input type="text" id="patient-name-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                                </div>
+                                <div>
+                                    <label for="patient-age-input" class="block text-sm font-medium text-gray-700 mb-1">Age</label>
+                                    <input type="number" id="patient-age-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                                </div>
+                                <div>
+                                    <label for="patient-gender-input" class="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                                    <select id="patient-gender-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                                        <option value="">Select gender</option>
+                                        <option value="Male">Male</option>
+                                        <option value="Female">Female</option>
+                                        <option value="Other">Other</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="patient-height-input" class="block text-sm font-medium text-gray-700 mb-1">Height (cm)</label>
+                                    <input type="number" id="patient-height-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                                </div>
+                                <div>
+                                    <label for="patient-weight-input" class="block text-sm font-medium text-gray-700 mb-1">Weight (kg)</label>
+                                    <input type="number" id="patient-weight-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Medical Information -->
+                        <div>
+                            <h3 class="text-lg font-medium text-green-600 mb-3">Medical Information</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label for="patient-diagnosis-input" class="block text-sm font-medium text-gray-700 mb-1">Primary Diagnosis</label>
+                                    <input type="text" id="patient-diagnosis-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" required>
+                                </div>
+                                <div>
+                                    <label for="patient-symptoms-input" class="block text-sm font-medium text-gray-700 mb-1">Current Symptoms (comma separated)</label>
+                                    <textarea id="patient-symptoms-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" rows="2"></textarea>
+                                </div>
+                                <div>
+                                    <label for="patient-medications-input" class="block text-sm font-medium text-gray-700 mb-1">Current Medications (comma separated)</label>
+                                    <textarea id="patient-medications-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" rows="2"></textarea>
+                                </div>
+                                <div>
+                                    <label for="patient-allergies-input" class="block text-sm font-medium text-gray-700 mb-1">Allergies (comma separated)</label>
+                                    <textarea id="patient-allergies-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" rows="2"></textarea>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <div>
+                            <label for="patient-history-input" class="block text-sm font-medium text-gray-700 mb-1">Medical History</label>
+                            <textarea id="patient-history-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" rows="3"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label for="monitoring-reason-input" class="block text-sm font-medium text-gray-700 mb-1">Reason for Monitoring</label>
+                            <textarea id="monitoring-reason-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" rows="2" required></textarea>
+                            <!-- Hidden field for start date -->
+                            <input type="hidden" id="monitoring-start-date-input">
+                        </div>
+                        
+                        <div>
+                            <label for="monitoring-concerns-input" class="block text-sm font-medium text-gray-700 mb-1">Specific Concerns to Monitor (comma separated)</label>
+                            <textarea id="monitoring-concerns-input" class="w-full px-3 py-2 border border-gray-300 rounded-md" rows="2"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3">
+                        <button type="button" id="cancel-patient-form" class="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300">
+                            Cancel
+                        </button>
+                        <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                            Save Patient Information
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add this after the patient form modal -->
+    <div id="notification-settings-modal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Email Notification Settings</h2>
+                <button id="close-notification-settings" class="text-gray-500 hover:text-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            
+            <form id="notification-settings-form">
+                <div class="mb-4">
+                    <div class="flex items-center mb-2">
+                        <input type="checkbox" id="enable-email-alerts" class="mr-2">
+                        <label for="enable-email-alerts" class="font-medium">Enable Email Alerts</label>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email Addresses (one per line)</label>
+                        <textarea id="notification-emails" class="w-full px-3 py-2 border border-gray-300 rounded-md" rows="3" placeholder="example@email.com"></textarea>
+                    </div>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button type="button" id="test-notifications" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                        Test Email
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
